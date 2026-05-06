@@ -220,20 +220,31 @@ def find_iface():
 
 
 def monitor_up(iface):
-    """Put *iface* into monitor mode. Returns interface name or None.
-    
-    Only stops services for this specific interface — wlan0/WebUI is never touched.
-    """
-    return monitor_mode_helper.activate_monitor_mode(iface)
+    """Put interface into monitor mode via iw."""
+    if not iface:
+        return None
+    for cmd in [
+        ["/usr/bin/ip", "link", "set", iface, "down"],
+        ["/usr/sbin/iw", iface, "set", "monitor", "none"],
+        ["/usr/bin/ip", "link", "set", iface, "up"],
+    ]:
+        subprocess.run(cmd, capture_output=True, timeout=5)
+    time.sleep(0.3)
+    r = subprocess.run(["/usr/sbin/iw", "dev", iface, "info"],
+                       capture_output=True, text=True, timeout=5)
+    return iface if "type monitor" in r.stdout else None
 
 
 def monitor_down(iface):
-    """Best-effort restore to managed mode.
-    
-    Re-manages the interface in NetworkManager instead of restarting the service
-    (which would disrupt wlan0/WebUI).
-    """
-    monitor_mode_helper.deactivate_monitor_mode(iface)
+    """Restore interface to managed mode."""
+    if not iface:
+        return
+    for cmd in [
+        ["/usr/bin/ip", "link", "set", iface, "down"],
+        ["/usr/sbin/iw", iface, "set", "type", "managed"],
+        ["/usr/bin/ip", "link", "set", iface, "up"],
+    ]:
+        subprocess.run(cmd, capture_output=True, timeout=5)
 
 # ===================================================================
 # WiFi threads
@@ -248,7 +259,7 @@ def _hop_thread():
             ch = CHALL[idx % len(CHALL)]
             try:
                 subprocess.run(
-                    ["sudo", "iw", "dev", mon_iface, "set", "channel", str(ch)],
+                    ["/usr/sbin/iw", "dev", mon_iface, "set", "channel", str(ch)],
                     capture_output=True, timeout=3)
                 cur_ch = ch
             except Exception:
