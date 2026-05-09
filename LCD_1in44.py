@@ -68,6 +68,64 @@ _M5_FRAME_QUALITY = int(os.environ.get("KTOX_CARDPUTER_FRAME_QUALITY") or os.env
 _M5_FRAME_MODE = os.environ.get("KTOX_CARDPUTER_FRAME_MODE") or os.environ.get("RJ_CARDPUTER_FRAME_MODE", "contain")
 _last_m5_frame_save = 0.0
 
+# Screen rotation (degrees: 0, 90, 180, 270)
+_SCREEN_ROTATION = 0
+
+def _load_rotation_config():
+	"""Load rotation setting from gui_conf.json."""
+	global _SCREEN_ROTATION
+	try:
+		import json
+		conf_paths = [
+			os.path.join(os.path.dirname(os.path.abspath(__file__)), "gui_conf.json"),
+			"/root/KTOx/gui_conf.json",
+		]
+		for path in conf_paths:
+			if os.path.isfile(path):
+				with open(path, 'r') as f:
+					conf = json.load(f)
+				_SCREEN_ROTATION = conf.get("UI", {}).get("ROTATION", 0)
+				break
+	except Exception:
+		_SCREEN_ROTATION = 0
+
+def set_screen_rotation(degrees):
+	"""Set screen rotation (0, 90, 180, 270)."""
+	global _SCREEN_ROTATION
+	if degrees in (0, 90, 180, 270):
+		_SCREEN_ROTATION = degrees
+		try:
+			import json
+			conf_paths = [
+				os.path.join(os.path.dirname(os.path.abspath(__file__)), "gui_conf.json"),
+				"/root/KTOx/gui_conf.json",
+			]
+			for path in conf_paths:
+				if os.path.isfile(path):
+					with open(path, 'r') as f:
+						conf = json.load(f)
+					conf.setdefault("UI", {})["ROTATION"] = degrees
+					with open(path, 'w') as f:
+						json.dump(conf, f, indent=4)
+					break
+		except Exception:
+			pass
+
+def _apply_rotation(pil_image, rotation):
+	"""Apply rotation to PIL image if needed."""
+	if rotation == 0:
+		return pil_image
+	elif rotation == 90:
+		return pil_image.transpose(3)  # Image.ROTATE_270
+	elif rotation == 180:
+		return pil_image.transpose(2)  # Image.ROTATE_180
+	elif rotation == 270:
+		return pil_image.transpose(4)  # Image.ROTATE_90
+	return pil_image
+
+# Load rotation on module import
+_load_rotation_config()
+
 #scanning method
 L2R_U2D = 1
 L2R_D2U = 2
@@ -363,6 +421,7 @@ class LCD:
 	def LCD_ShowImage(self,Image,Xstart,Ystart):
 		if (Image == None):
 			return
+		Image = _apply_rotation(Image, _SCREEN_ROTATION)
 		imwidth, imheight = Image.size
 		if imwidth != self.width or imheight != self.height:
 			raise ValueError('Image must be same dimensions as display \
