@@ -355,6 +355,26 @@
       border-radius: 16px;
     }
 
+    #deviceShell {
+      transition: transform 0.3s ease;
+    }
+
+    #deviceShell.rotate-0 {
+      transform: rotate(0deg);
+    }
+
+    #deviceShell.rotate-90 {
+      transform: rotate(90deg);
+    }
+
+    #deviceShell.rotate-180 {
+      transform: rotate(180deg);
+    }
+
+    #deviceShell.rotate-270 {
+      transform: rotate(270deg);
+    }
+
     @media (max-width: 768px) {
       main {
         padding-left: 0.75rem !important;

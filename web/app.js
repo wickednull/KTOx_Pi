@@ -706,6 +706,39 @@
     });
   }
 
+  // Screen rotation support
+  const ROTATION_STORAGE_KEY = 'rj.screenRotation';
+  let currentRotation = 0;
+
+  function loadRotationPreference(){
+    try {
+      const saved = localStorage.getItem(ROTATION_STORAGE_KEY);
+      if (saved) currentRotation = parseInt(saved, 10);
+    } catch {}
+  }
+
+  function applyRotation(){
+    if (!deviceShell) return;
+    deviceShell.classList.remove('rotate-0', 'rotate-90', 'rotate-180', 'rotate-270');
+    deviceShell.classList.add(`rotate-${currentRotation}`);
+    applyButtonRotation();
+  }
+
+  function applyButtonRotation(){
+    const buttons = document.querySelectorAll('[data-btn]');
+    buttons.forEach(btn => {
+      btn.dataset.rotation = currentRotation;
+    });
+  }
+
+  function setRotation(degrees){
+    currentRotation = degrees;
+    try {
+      localStorage.setItem(ROTATION_STORAGE_KEY, degrees);
+    } catch {}
+    applyRotation();
+  }
+
   function setLayoutVisible(layout, visible){
     if (!layout) return;
     layout.classList.toggle('hidden', !visible);
@@ -1888,10 +1921,21 @@
     }
   }
 
+  function rotateButton(btn, rotation) {
+    if (rotation === 0 || !btn) return btn;
+    const rotations = {
+      90: { UP: 'LEFT', DOWN: 'RIGHT', LEFT: 'DOWN', RIGHT: 'UP' },
+      180: { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' },
+      270: { UP: 'RIGHT', DOWN: 'LEFT', LEFT: 'UP', RIGHT: 'DOWN' }
+    };
+    return rotations[rotation]?.[btn] || btn;
+  }
+
   function sendInput(button, state){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     try{
-      ws.send(JSON.stringify({ type: 'input', button, state }));
+      const rotatedButton = rotateButton(button, currentRotation);
+      ws.send(JSON.stringify({ type: 'input', button: rotatedButton, state }));
     }catch{}
   }
 
@@ -2167,6 +2211,8 @@
   loadAuthToken();
   loadThemePreference();
   applyTheme();
+  loadRotationPreference();
+  applyRotation();
   setActiveTab('device');
 
   let payloadPollTimer = null;
