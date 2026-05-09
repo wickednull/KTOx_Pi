@@ -521,4 +521,6 @@ The Waveshare 1.44" HAT mounts on any board with a standard 40-pin header. BCM p
 
 **Credit to RaspyJack** for the WebUI frontend, WebSocket concept, and DNSSpoof phishing sites — [github.com/7h30th3r0n3/Raspyjack](https://github.com/7h30th3r0n3/Raspyjack)
 
+**Credit to brainphreak** for the Loki reconnaissance engine — [github.com/brainphreak/loki-recon](https://github.com/brainphreak/loki-recon)
+
 **KTOx_Pi** — [github.com/wickednull/KTOx_Pi](https://github.com/wickednull/KTOx_Pi) · [@wickednull](https://github.com/wickednull)
