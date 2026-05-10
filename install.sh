@@ -72,8 +72,8 @@ apt-get install -y brcmfmac-nexmon-dkms firmware-nexmon 2>/dev/null \
 
 # ── Pip packages ──────────────────────────────────────────────────────────────
 step "Installing Python packages..."
-pip3 install --break-system-packages rich flask websockets pillow spidev RPi.GPIO requests 2>/dev/null \
-    || pip3 install rich flask websockets pillow spidev RPi.GPIO requests
+pip3 install --break-system-packages rich flask websockets pillow spidev RPi.GPIO requests python-nmap evdev 2>/dev/null \
+    || pip3 install rich flask websockets pillow spidev RPi.GPIO requests python-nmap evdev
 pip3 install --break-system-packages customtkinter 2>/dev/null || true
 
 # ── Font Awesome ──────────────────────────────────────────────────────────────
