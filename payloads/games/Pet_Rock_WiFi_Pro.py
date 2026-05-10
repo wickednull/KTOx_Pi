@@ -571,71 +571,91 @@ def main():
     global mon_iface, original_mac, shutdown, capture_event, stealth_enabled, deauth_enabled
     global session_hs, session_hhs, session_pmkid, lifetime_hs, lifetime_hhs, lifetime_pmkid
 
-    load_stats()
-    set_mood("waiting")
+    try:
+        load_stats()
+        set_mood("waiting")
+    except Exception as e:
+        show_message(f"Load err:\n{str(e)[:20]}", 2)
+        return
 
     # Select adapter
-    adapters = []
-    for iface in ["wlan0", "wlan1"]:
-        if subprocess.run(["ip", "link", "show", iface], capture_output=True).returncode == 0:
-            adapters.append(iface)
+    try:
+        adapters = []
+        for iface in ["wlan0", "wlan1"]:
+            if subprocess.run(["ip", "link", "show", iface], capture_output=True).returncode == 0:
+                adapters.append(iface)
 
-    if not adapters:
-        show_message("No WiFi\nadapters!", 2)
+        if not adapters:
+            show_message("No WiFi\nadapters!", 2)
+            return
+    except Exception as e:
+        show_message(f"Adapter err:\n{str(e)[:20]}", 2)
         return
 
-    if len(adapters) > 1:
-        selection = 0
-        while True:
-            img = Image.new("RGB", (W, H), "#0A0000")
-            d = ImageDraw.Draw(img)
-            d.rectangle((0, 0, W, 17), fill=(139, 0, 0))
-            d.text((4, 3), "SELECT ADAPTER", font=f9, fill=(231, 76, 60))
-            for i, adapter in enumerate(adapters):
-                col = "#FF3333" if i == selection else "#AAAAAA"
-                d.text((20, 40 + i*30), adapter, font=f11, fill=col)
-            d.text((4, H-10), "U/D:Nav K1:Start K3:Exit", font=f9, fill=(192, 57, 43))
-            LCD.LCD_ShowImage(img, 0, 0)
+    try:
+        if len(adapters) > 1:
+            selection = 0
+            while True:
+                img = Image.new("RGB", (W, H), "#0A0000")
+                d = ImageDraw.Draw(img)
+                d.rectangle((0, 0, W, 17), fill=(139, 0, 0))
+                d.text((4, 3), "SELECT ADAPTER", font=f9, fill=(231, 76, 60))
+                for i, adapter in enumerate(adapters):
+                    col = "#FF3333" if i == selection else "#AAAAAA"
+                    d.text((20, 40 + i*30), adapter, font=f11, fill=col)
+                d.text((4, H-10), "U/D:Nav K1:Start K3:Exit", font=f9, fill=(192, 57, 43))
+                LCD.LCD_ShowImage(img, 0, 0)
 
-            btn = wait_btn(0.1)
-            if btn == "UP" and selection > 0:
-                selection -= 1
-            elif btn == "DOWN" and selection < len(adapters) - 1:
-                selection += 1
-            elif btn == "KEY1":
-                adapter = adapters[selection]
-                break
-            elif btn == "KEY3":
-                return
-    else:
-        adapter = adapters[0]
-
-    show_message(f"Using\n{adapter}", 1)
-    show_message("Enabling\nmonitor...", 2)
-
-    original_mac = get_mac(adapter)
-    mon_iface = monitor_up(adapter)
-
-    if not mon_iface:
-        show_message("Monitor mode\nfailed!", 2)
+                btn = wait_btn(0.1)
+                if btn == "UP" and selection > 0:
+                    selection -= 1
+                elif btn == "DOWN" and selection < len(adapters) - 1:
+                    selection += 1
+                elif btn == "KEY1":
+                    adapter = adapters[selection]
+                    break
+                elif btn == "KEY3":
+                    return
+        else:
+            adapter = adapters[0]
+    except Exception as e:
+        show_message(f"Sel err:\n{str(e)[:20]}", 2)
         return
 
-    show_message("Starting\nscan...", 1)
+    try:
+        show_message(f"Using\n{adapter}", 1)
+        show_message("Enabling\nmonitor...", 2)
 
-    # Setup signal handlers
-    def _stop(sig, frame):
-        shutdown.set()
+        original_mac = get_mac(adapter)
+        mon_iface = monitor_up(adapter)
 
-    signal.signal(signal.SIGTERM, _stop)
-    signal.signal(signal.SIGINT, _stop)
+        if not mon_iface:
+            show_message("Monitor mode\nfailed!", 2)
+            return
 
-    # Start capture
-    capture_event.set()
+        show_message("Starting\nscan...", 1)
+    except Exception as e:
+        show_message(f"Monitor err:\n{str(e)[:20]}", 2)
+        return
 
-    # Start threads
-    threading.Thread(target=sniffer_thread, daemon=True).start()
-    threading.Thread(target=half_hs_checker, daemon=True).start()
-    threading.Thread(target=channel_hopper, daemon=True).start()
+    try:
+        # Setup signal handlers
+        def _stop(sig, frame):
+            shutdown.set()
+
+        signal.signal(signal.SIGTERM, _stop)
+        signal.signal(signal.SIGINT, _stop)
+
+        # Start capture
+        capture_event.set()
+
+        # Start threads
+        threading.Thread(target=sniffer_thread, daemon=True).start()
+        threading.Thread(target=half_hs_checker, daemon=True).start()
+        threading.Thread(target=channel_hopper, daemon=True).start()
+    except Exception as e:
+        show_message(f"Thread err:\n{str(e)[:20]}", 2)
+        return
 
     view = "face"
     last_draw_time = 0
@@ -688,4 +708,14 @@ def main():
         GPIO.cleanup()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Show error on display
+        try:
+            show_message(f"ERROR:\n{str(e)[:30]}", 5)
+        except:
+            pass
+        import traceback
+        traceback.print_exc()
+        GPIO.cleanup()
