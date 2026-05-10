@@ -124,12 +124,15 @@ def read_wifite_output():
     except:
         pass
 
-def send_input(text):
+def send_input(text, add_newline=True):
     """Send input to wifite."""
     global master_fd
     if master_fd:
         try:
-            os.write(master_fd, (text + '\n').encode())
+            if add_newline:
+                os.write(master_fd, (text + '\n').encode())
+            else:
+                os.write(master_fd, text.encode())
         except:
             pass
 
@@ -174,7 +177,7 @@ def run_wifite_interactive(iface):
             if HAS_LCD:
                 # KEY3 to exit
                 if GPIO.input(PINS["KEY3"]) == 0:
-                    send_input('q')  # Try to quit wifite gracefully
+                    send_input('q', add_newline=True)  # Quit wifite
                     time.sleep(0.5)
                     try:
                         wifite_proc.terminate()
@@ -183,17 +186,17 @@ def run_wifite_interactive(iface):
                         pass
                     break
 
-                # UP/DOWN for scrolling (send arrow keys)
+                # UP/DOWN for navigation (send arrow keys without newline)
                 if GPIO.input(PINS["UP"]) == 0:
-                    send_input('\x1B[A')  # Up arrow
+                    send_input('\x1B[A', add_newline=False)  # Up arrow
                     time.sleep(0.2)
                 elif GPIO.input(PINS["DOWN"]) == 0:
-                    send_input('\x1B[B')  # Down arrow
+                    send_input('\x1B[B', add_newline=False)  # Down arrow
                     time.sleep(0.2)
 
-                # OK for selecting
+                # OK for selecting (send return)
                 elif GPIO.input(PINS["OK"]) == 0:
-                    send_input('\r')  # Return
+                    send_input('\r', add_newline=False)  # Return key
                     time.sleep(0.2)
 
             time.sleep(0.05)

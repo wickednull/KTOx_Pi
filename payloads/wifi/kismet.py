@@ -121,12 +121,15 @@ def read_kismet_output():
     except:
         pass
 
-def send_input(text):
+def send_input(text, add_newline=True):
     """Send input to kismet."""
     global master_fd
     if master_fd:
         try:
-            os.write(master_fd, (text + '\n').encode())
+            if add_newline:
+                os.write(master_fd, (text + '\n').encode())
+            else:
+                os.write(master_fd, text.encode())
         except:
             pass
 
@@ -164,7 +167,7 @@ def run_kismet_scan(iface="wlan1"):
             if HAS_LCD:
                 # KEY3 to exit
                 if GPIO.input(PINS["KEY3"]) == 0:
-                    send_input('q')
+                    send_input('q', add_newline=True)
                     time.sleep(0.5)
                     try:
                         kismet_proc.terminate()
@@ -173,17 +176,17 @@ def run_kismet_scan(iface="wlan1"):
                         pass
                     break
 
-                # UP/DOWN for navigation
+                # UP/DOWN for navigation (without newline)
                 if GPIO.input(PINS["UP"]) == 0:
-                    send_input('\x1B[A')
+                    send_input('\x1B[A', add_newline=False)
                     time.sleep(0.2)
                 elif GPIO.input(PINS["DOWN"]) == 0:
-                    send_input('\x1B[B')
+                    send_input('\x1B[B', add_newline=False)
                     time.sleep(0.2)
 
-                # OK for selection
+                # OK for selection (without newline for return key)
                 elif GPIO.input(PINS["OK"]) == 0:
-                    send_input('\r')
+                    send_input('\r', add_newline=False)
                     time.sleep(0.2)
 
             time.sleep(0.05)
