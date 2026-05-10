@@ -72,8 +72,8 @@ apt-get install -y brcmfmac-nexmon-dkms firmware-nexmon 2>/dev/null \
 
 # ── Pip packages ──────────────────────────────────────────────────────────────
 step "Installing Python packages..."
-pip3 install --break-system-packages rich flask websockets pillow spidev RPi.GPIO requests 2>/dev/null \
-    || pip3 install rich flask websockets pillow spidev RPi.GPIO requests
+pip3 install --break-system-packages rich flask websockets pillow spidev RPi.GPIO requests python-nmap evdev 2>/dev/null \
+    || pip3 install rich flask websockets pillow spidev RPi.GPIO requests python-nmap evdev
 pip3 install --break-system-packages customtkinter 2>/dev/null || true
 
 # ── Font Awesome ──────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ KTOX_SUITE=(
     ktox.py ktox_mitm.py ktox_advanced.py ktox_extended.py
     ktox_defense.py ktox_stealth.py ktox_netattack.py ktox_wifi.py
     ktox_dashboard.py ktox_repl.py ktox_config.py
-    scan.py spoof.py requirements.txt
+    scan.py spoof.py requirements.txt setup_loki.sh
 )
 for f in "${KTOX_SUITE[@]}"; do
     [[ -f "$FIRMWARE_DIR/$f" ]] && cp "$FIRMWARE_DIR/$f" "$KTOX_DIR/" && info "Copied $f"
@@ -133,10 +133,12 @@ done
 [[ -d "$FIRMWARE_DIR/assets" ]] && cp -r "$FIRMWARE_DIR/assets" "$KTOX_DIR/"
 info "KTOx main suite installed"
 
-# Also install Python dependencies from requirements.txt
-[[ -f "$KTOX_DIR/requirements.txt" ]] &&     pip3 install --break-system-packages -r "$KTOX_DIR/requirements.txt" 2>/dev/null || true
+# Install Python dependencies from requirements.txt
+[[ -f "$KTOX_DIR/requirements.txt" ]] && pip3 install --break-system-packages -r "$KTOX_DIR/requirements.txt" 2>/dev/null || true
 
+# Make scripts executable
 chmod +x "$KTOX_DIR/ktox_device.py"
+[[ -f "$KTOX_DIR/setup_loki.sh" ]] && chmod +x "$KTOX_DIR/setup_loki.sh"
 mkdir -p "$KTOX_DIR/loot/MITM" "$KTOX_DIR/loot/Nmap" "$KTOX_DIR/loot/payloads"
 mkdir -p "$KTOX_DIR/roms"   # Game Boy / emulator ROMs — never overwritten by OTA
 
