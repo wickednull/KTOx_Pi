@@ -1,260 +1,270 @@
 #!/usr/bin/env python3
 """
-KTOx Payload – Wifite WiFi Auditor (LCD Optimized)
-===================================================
-Interactive WiFi auditing and cracking using wifite, optimized for small LCD.
-
-Features:
-  - Real-time WiFi network scanning
-  - WPA/WPA2 cracking with multiple attacks
-  - Handshake capture and analysis
-  - Display optimized for 128x128 LCD
-  - Full keyboard control
+KTOx Payload – Wifite WiFi Auditor (LCD)
+=========================================
+Simple, robust wrapper for wifite with LCD display on KTOx_Pi.
 
 Controls:
-  UP / DOWN / LEFT / RIGHT  – Navigate keyboard
-  OK                        – Press key
-  KEY1                      – Delete / Back
-  KEY3                      – Exit tool
+  UP / DOWN         – Navigate options
+  OK / CENTER       – Select / Execute
+  KEY3              – Exit payload
 """
 
-import os
 import sys
+import os
 import time
 import signal
 import subprocess
 import threading
-import json
-import re
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT2 = os.path.abspath(os.path.join(_HERE, "..", ".."))
-_ROOT3 = os.path.abspath(os.path.join(_HERE, "..", "..", ".."))
-for _p in (_ROOT2, _ROOT3):
-    if _p not in sys.path:
-        sys.path.append(_p)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-import RPi.GPIO as GPIO
-import LCD_1in44
-from PIL import Image, ImageDraw, ImageFont
-
+# Hardware detection
 try:
-    from _darksec_keyboard import DarkSecKeyboard
-except ImportError:
-    from payloads._darksec_keyboard import DarkSecKeyboard
+    import RPi.GPIO as GPIO
+    import LCD_1in44
+    from PIL import Image, ImageDraw, ImageFont
+    HAS_LCD = True
+except (ImportError, RuntimeError):
+    HAS_LCD = False
 
-# Hardware setup
-PINS = {
-    "UP": 6, "DOWN": 19, "LEFT": 5, "RIGHT": 26,
-    "OK": 13, "KEY1": 21, "KEY2": 20, "KEY3": 16,
-}
-GPIO.setmode(GPIO.BCM)
-for _p in PINS.values():
-    GPIO.setup(_p, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Get screen rotation
-ROTATION = 0
-try:
-    if os.path.exists("/root/KTOx/gui_conf.json"):
-        with open("/root/KTOx/gui_conf.json") as f:
-            conf = json.load(f)
-            ROTATION = conf.get("rotation", 0)
-except:
-    pass
+PINS = {"UP": 6, "DOWN": 19, "LEFT": 5, "RIGHT": 26, "OK": 13, "KEY1": 21, "KEY2": 20, "KEY3": 16}
+LCD = None
+WIDTH, HEIGHT = 128, 128
+FONT = None
 
-def _rotate_button(btn, rotation):
-    """Map button input based on screen rotation."""
-    if rotation == 0 or not btn:
-        return btn
-    rotations = {
-        90: {"UP": "LEFT", "DOWN": "RIGHT", "LEFT": "DOWN", "RIGHT": "UP"},
-        180: {"UP": "DOWN", "DOWN": "UP", "LEFT": "RIGHT", "RIGHT": "LEFT"},
-        270: {"UP": "RIGHT", "DOWN": "LEFT", "LEFT": "UP", "RIGHT": "DOWN"},
-    }
-    return rotations.get(rotation, {}).get(btn, btn)
+if HAS_LCD:
+    GPIO.setmode(GPIO.BCM)
+    for pin in PINS.values():
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    LCD = LCD_1in44.LCD()
+    LCD.LCD_Init(LCD_1in44.SCAN_DIR_DFT)
+    FONT = ImageFont.load_default()
 
-LCD = LCD_1in44.LCD()
-LCD.LCD_Init(LCD_1in44.SCAN_DIR_DFT)
-WIDTH, HEIGHT = LCD.width, LCD.height
+# ─────────────────────────────────────────────────────────────────────────────
 
 running = True
-proc = None
+wifite_process = None
+output_lines = []
+output_lock = threading.Lock()
 
-def _sig(s, f):
-    global running, proc
+def cleanup(*_):
+    global running, wifite_process
     running = False
-    if proc:
+    if wifite_process and wifite_process.poll() is None:
         try:
-            proc.stdin.close()
-            proc.terminate()
+            wifite_process.terminate()
+            wifite_process.wait(timeout=2)
+        except:
+            try:
+                wifite_process.kill()
+            except:
+                pass
+    if HAS_LCD:
+        try:
+            LCD.LCD_Clear()
+            GPIO.cleanup()
         except:
             pass
+    sys.exit(0)
 
-signal.signal(signal.SIGTERM, _sig)
-signal.signal(signal.SIGINT, _sig)
+signal.signal(signal.SIGINT, cleanup)
+signal.signal(signal.SIGTERM, cleanup)
 
-def _strip_ansi(text):
-    """Remove ANSI color codes from text."""
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
-
-def _display_output(lines, title="WIFITE"):
-    """Display tool output on LCD with scrolling."""
-    img = Image.new("RGB", (WIDTH, HEIGHT), (10, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.rectangle((0, 0, 127, 12), fill=(139, 0, 0))
-    draw.text((4, 1), title, font=ImageFont.load_default(), fill=(192, 57, 43))
-
-    y = 16
-    for line in lines[-7:]:
-        text = _strip_ansi(line)[:20]
-        draw.text((2, y), text, font=ImageFont.load_default(), fill=(242, 243, 244))
-        y += 12
-
-    draw.rectangle((0, 117, 127, 127), fill=(34, 0, 0))
-    draw.text((4, 120), "Use keyboard", font=ImageFont.load_default(), fill=(113, 125, 126))
-    LCD.LCD_ShowImage(img, 0, 0)
-
-def main():
-    global proc, running
-
+def draw_ui(title="", lines=None):
+    """Draw UI on LCD."""
+    if not HAS_LCD or not LCD:
+        return
     try:
-        proc = subprocess.Popen(
-            ["sudo", "wifite", "-h"],
-            stdin=subprocess.PIPE,
+        img = Image.new("RGB", (WIDTH, HEIGHT), (10, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        # Title bar
+        draw.rectangle((0, 0, WIDTH, 12), fill=(139, 0, 0))
+        draw.text((4, 1), title[:20], font=FONT, fill=(192, 57, 43))
+
+        # Content
+        y = 16
+        if lines:
+            for line in lines[-7:]:
+                text = str(line)[:20].strip()
+                draw.text((2, y), text, font=FONT, fill=(242, 243, 244))
+                y += 12
+
+        # Footer
+        draw.rectangle((0, 117, WIDTH, 127), fill=(34, 0, 0))
+        draw.text((4, 120), "KEY3=Exit", font=FONT, fill=(113, 125, 126))
+
+        LCD.LCD_ShowImage(img, 0, 0)
+    except Exception as e:
+        pass
+
+def read_wifite_output():
+    """Read and display wifite output."""
+    global wifite_process, output_lines
+    try:
+        while wifite_process and wifite_process.poll() is None and running:
+            try:
+                line = wifite_process.stdout.readline()
+                if line:
+                    clean_line = line.strip()
+                    if clean_line:
+                        with output_lock:
+                            output_lines.append(clean_line)
+                            if len(output_lines) > 50:
+                                output_lines = output_lines[-50:]
+            except:
+                pass
+            time.sleep(0.05)
+    except:
+        pass
+
+def run_wifite_scan():
+    """Start wifite scanning."""
+    global wifite_process, output_lines
+    try:
+        output_lines = []
+        draw_ui("WIFITE", ["Starting scan...", "Please wait..."])
+
+        wifite_process = subprocess.Popen(
+            ["sudo", "wifite", "-i", "wlan1"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1,
-            universal_newlines=True
+            bufsize=1
         )
-        proc.terminate()
-        proc.wait(timeout=1)
-    except Exception:
-        img = Image.new("RGB", (WIDTH, HEIGHT), (10, 0, 0))
-        draw = ImageDraw.Draw(img)
-        draw.text((4, 20), "Wifite not found", fill=(242, 243, 244))
-        LCD.LCD_ShowImage(img, 0, 0)
-        time.sleep(3)
-        GPIO.cleanup()
-        return 1
 
-    kb = DarkSecKeyboard(
-        width=WIDTH,
-        height=HEIGHT,
-        lcd=LCD,
-        gpio_pins=PINS,
-        gpio_module=GPIO,
-    )
+        reader_thread = threading.Thread(target=read_wifite_output, daemon=True)
+        reader_thread.start()
 
-    output_lines = []
-    input_buffer = ""
-    scanning = False
+        return True
+    except FileNotFoundError:
+        draw_ui("ERROR", ["Wifite not", "installed"])
+        time.sleep(2)
+        return False
+    except Exception as e:
+        draw_ui("ERROR", [str(e)[:20]])
+        time.sleep(2)
+        return False
 
-    def run_wifite():
-        global proc, running
+def show_menu():
+    """Show main menu."""
+    menu = ["Start Scan", "View Handshakes", "Exit"]
+    selected = 0
+
+    while running:
         try:
-            cmd = ["sudo", "wifite"] + input_buffer.split()
-            proc = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
-        except Exception as e:
-            return [f"Error: {str(e)[:40]}"]
+            img = Image.new("RGB", (WIDTH, HEIGHT), (10, 0, 0))
+            draw = ImageDraw.Draw(img)
 
-        nonlocal output_lines
-        try:
-            while proc.poll() is None and running:
-                try:
-                    line = proc.stdout.readline()
-                    if line:
-                        output_lines.append(line.strip())
-                        if len(output_lines) > 50:
-                            output_lines = output_lines[-50:]
-                        _display_output(output_lines)
-                except:
-                    pass
-                time.sleep(0.05)
-        except:
-            pass
+            # Title
+            draw.rectangle((0, 0, WIDTH, 12), fill=(139, 0, 0))
+            draw.text((4, 1), "WIFITE", font=FONT, fill=(192, 57, 43))
 
-    try:
-        while running:
-            kb.draw()
-            if scanning:
-                _display_output(output_lines)
-            else:
-                img = Image.new("RGB", (WIDTH, HEIGHT), (10, 0, 0))
-                draw = ImageDraw.Draw(img)
-                draw.rectangle((0, 0, 127, 12), fill=(139, 0, 0))
-                draw.text((4, 1), "WIFITE", font=ImageFont.load_default(), fill=(192, 57, 43))
-                draw.text((2, 20), "Args:", font=ImageFont.load_default(), fill=(242, 243, 244))
-                draw.text((2, 40), input_buffer[:20], font=ImageFont.load_default(), fill=(170, 170, 255))
-                draw.text((2, 100), "OK=Start KEY3=Exit", font=ImageFont.load_default(), fill=(113, 125, 126))
+            # Menu items
+            y = 20
+            for i, item in enumerate(menu):
+                color = (212, 172, 13) if i == selected else (242, 243, 244)
+                marker = ">" if i == selected else " "
+                draw.text((2, y), f"{marker} {item}", font=FONT, fill=color)
+                y += 15
+
+            if HAS_LCD:
                 LCD.LCD_ShowImage(img, 0, 0)
 
-            btn = kb._get_gpio_action()
-            if btn:
-                btn = _rotate_button(btn, ROTATION)
-
-            if btn == "KEY3":
-                break
-            elif not scanning:
-                if btn == "UP":
-                    kb.row = max(-1, kb.row - 1)
-                elif btn == "DOWN":
-                    kb.row = min(len(kb._current_kb()) - 1, kb.row + 1)
-                elif btn == "LEFT":
-                    kb.col = max(0, kb.col - 1)
-                elif btn == "RIGHT":
-                    kb.col = min(len(kb._current_kb()[kb.row]) - 1, kb.col + 1)
-                elif btn == "OK":
-                    if kb.row >= 0:
-                        key = kb._current_kb()[kb.row][kb.col]
-                        if key == "ENT":
-                            scanning = True
-                            output_lines = []
-                            reader = threading.Thread(target=run_wifite, daemon=True)
-                            reader.start()
-                        elif key == "BS":
-                            input_buffer = input_buffer[:-1]
-                        elif key == "SPC":
-                            input_buffer += " "
-                        elif key == "CLR":
-                            input_buffer = ""
-                        elif key not in ("abc", "ABC", "123", "TOOL", "SYM", "C-C"):
-                            input_buffer += key
+            # Button handling
+            if HAS_LCD:
+                if GPIO.input(PINS["UP"]) == 0:
+                    selected = (selected - 1) % len(menu)
+                    time.sleep(0.2)
+                elif GPIO.input(PINS["DOWN"]) == 0:
+                    selected = (selected + 1) % len(menu)
+                    time.sleep(0.2)
+                elif GPIO.input(PINS["OK"]) == 0:
+                    time.sleep(0.2)
+                    if selected == 0:
+                        show_scan()
+                    elif selected == 1:
+                        show_handshakes()
+                    elif selected == 2:
+                        cleanup()
+                elif GPIO.input(PINS["KEY3"]) == 0:
+                    cleanup()
             else:
-                if btn == "KEY3":
-                    if proc:
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            cleanup()
+        except Exception:
+            time.sleep(0.1)
+
+def show_scan():
+    """Show scan results."""
+    global wifite_process, output_lines
+
+    if not run_wifite_scan():
+        return
+
+    while running:
+        try:
+            with output_lock:
+                lines_copy = output_lines.copy()
+            draw_ui("WIFITE SCAN", lines_copy)
+
+            if HAS_LCD:
+                if GPIO.input(PINS["KEY3"]) == 0:
+                    if wifite_process and wifite_process.poll() is None:
+                        wifite_process.terminate()
                         try:
-                            proc.terminate()
-                            proc.wait(timeout=2)
+                            wifite_process.wait(timeout=1)
                         except:
-                            pass
-                    scanning = False
+                            wifite_process.kill()
+                    break
 
-            time.sleep(0.05)
+            time.sleep(0.1)
+        except KeyboardInterrupt:
+            if wifite_process:
+                wifite_process.terminate()
+            break
+        except Exception:
+            time.sleep(0.1)
 
+def show_handshakes():
+    """Show saved handshakes."""
+    lines = ["Checking for", "saved handshakes...", ""]
+
+    try:
+        result = subprocess.run(
+            ["find", "/root/KTOx/loot", "-name", "*.cap", "-o", "-name", "*.pcap"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.stdout:
+            handshakes = result.stdout.strip().split('\n')
+            lines.extend([os.path.basename(h) for h in handshakes[:5]])
+        else:
+            lines.append("No handshakes found")
+    except:
+        lines.append("Error reading files")
+
+    draw_ui("HANDSHAKES", lines)
+    time.sleep(3)
+
+def main():
+    """Main entry point."""
+    global running
+
+    try:
+        show_menu()
     except KeyboardInterrupt:
-        pass
-    finally:
-        if proc:
-            try:
-                proc.stdin.close()
-                proc.terminate()
-                proc.wait(timeout=2)
-            except:
-                pass
-        LCD.LCD_Clear()
-        GPIO.cleanup()
-
-    return 0
+        cleanup()
+    except Exception as e:
+        if HAS_LCD:
+            draw_ui("ERROR", [str(e)[:20]])
+            time.sleep(2)
+        cleanup()
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
