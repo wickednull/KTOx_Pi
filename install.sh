@@ -133,6 +133,9 @@ done
 [[ -d "$FIRMWARE_DIR/assets" ]] && cp -r "$FIRMWARE_DIR/assets" "$KTOX_DIR/"
 info "KTOx main suite installed"
 
+# Install Python dependencies from requirements.txt
+[[ -f "$KTOX_DIR/requirements.txt" ]] && pip3 install --break-system-packages -r "$KTOX_DIR/requirements.txt" 2>/dev/null || true
+
 # Make scripts executable
 chmod +x "$KTOX_DIR/ktox_device.py"
 [[ -f "$KTOX_DIR/setup_loki.sh" ]] && chmod +x "$KTOX_DIR/setup_loki.sh"
