@@ -43,6 +43,7 @@
   const themeNameEl = document.getElementById('themeName');
   const navDevice = document.getElementById('navDevice');
   const navSystem = document.getElementById('navSystem');
+  const navPentest = document.getElementById('navPentest');
   const navLoot = document.getElementById('navLoot');
   const navSettings = document.getElementById('navSettings');
   const navPayloadStudio = document.getElementById('navPayloadStudio');
@@ -53,6 +54,7 @@
   const deviceTab = document.getElementById('deviceTab');
   const systemDropdown = document.getElementById('systemDropdown');
   const settingsTab = document.getElementById('settingsTab');
+  const pentestTab = document.getElementById('pentestTab');
   const lootTab = document.getElementById('lootTab');
   const systemStatus = document.getElementById('systemStatus');
   const sysCpuValue = document.getElementById('sysCpuValue');
@@ -89,6 +91,13 @@
   const pentestUrl = document.getElementById('pentestUrl');
   const pentestStart = document.getElementById('pentestStart');
   const pentestStop = document.getElementById('pentestStop');
+  const pentestOpen = document.getElementById('pentestOpen');
+  const pentestFrame = document.getElementById('pentestFrame');
+  const pentestFrameStatus = document.getElementById('pentestFrameStatus');
+  const pentestFrameStart = document.getElementById('pentestFrameStart');
+  const pentestFrameReload = document.getElementById('pentestFrameReload');
+  const pentestFrameStop = document.getElementById('pentestFrameStop');
+  const pentestFrameExternal = document.getElementById('pentestFrameExternal');
   const mobPentestStatus = document.getElementById('mobPentestStatus');
   const mobPentestUrl = document.getElementById('mobPentestUrl');
   const mobPentestStart = document.getElementById('mobPentestStart');
@@ -788,12 +797,15 @@
       deviceTab.classList.toggle('mobile-terminal-focus', tab === 'terminal');
     }
     if (settingsTab) settingsTab.classList.toggle('hidden', tab !== 'settings');
+    if (pentestTab) pentestTab.classList.toggle('hidden', tab !== 'pentest');
+    if (tab === 'pentest') ensurePentestConsole();
     if (lootTab) lootTab.classList.toggle('hidden', tab !== 'loot');
     const systemTabEl = document.getElementById('systemTab');
     if (systemTabEl) systemTabEl.classList.toggle('hidden', tab !== 'system');
     const payloadsTabEl = document.getElementById('payloadsTab');
     if (payloadsTabEl) payloadsTabEl.classList.toggle('hidden', tab !== 'payloads');
     setNavActive(navDevice, tab === 'device');
+    setNavActive(navPentest, tab === 'pentest');
     setNavActive(navLoot, tab === 'loot');
     setNavActive(navSettings, tab === 'settings');
     setSidebarOpen(false);
@@ -1110,6 +1122,24 @@
     el.style.width = `${Math.max(0, Math.min(100, value)).toFixed(1)}%`;
   }
 
+  function pentestProxyUrl(){
+    const search = window.location.search || '';
+    return `${location.origin}/pentest/${search}`;
+  }
+
+  function loadPentestConsole(force = false){
+    if (!pentestFrame) return;
+    const src = pentestProxyUrl();
+    if (force || pentestFrame.getAttribute('src') !== src){
+      pentestFrame.setAttribute('src', src);
+    }
+  }
+
+  function ensurePentestConsole(){
+    const running = pentestStatus && pentestStatus.textContent === 'running';
+    if (running) loadPentestConsole(false);
+  }
+
   function applyPentestData(pentest, target = 'desktop'){
     const data = pentest || {};
     const running = !!data.running;
@@ -1132,6 +1162,17 @@
         urlEl.classList.add('pointer-events-none');
       }
     }
+    if (pentestFrameStatus){
+      pentestFrameStatus.textContent = running
+        ? 'Tool console is ready below. Use it to create engagements, run tools, stop jobs, and view findings.'
+        : 'Start the server to load the tool console.';
+    }
+    if (pentestFrameExternal){
+      pentestFrameExternal.href = url || '#';
+      pentestFrameExternal.classList.toggle('pointer-events-none', !url);
+    }
+    if (target === 'desktop' && running && activeTab === 'pentest') loadPentestConsole(false);
+    if (!running && pentestFrame) pentestFrame.removeAttribute('src');
   }
 
   function applySystemData(data, target = 'desktop'){
@@ -1207,6 +1248,7 @@
       }
       applyPentestData(data, 'desktop');
       applyPentestData(data, 'mobile');
+      if (action === 'start') loadPentestConsole(true);
       await loadSystemStatus();
       if (typeof window.loadMobileSystemStatus === 'function') await loadMobileSystemStatus();
     } catch (e){
@@ -2089,6 +2131,10 @@
   if (navSystem) navSystem.addEventListener('click', () => {
     setSystemOpen(!systemOpen);
   });
+  if (navPentest) navPentest.addEventListener('click', () => {
+    setActiveTab('pentest');
+    loadSystemStatus().then(() => ensurePentestConsole()).catch(() => {});
+  });
   if (navLoot) navLoot.addEventListener('click', () => {
     setActiveTab('loot');
     if (lootList && !lootList.dataset.loaded){
@@ -2200,7 +2246,11 @@
   });
   if (payloadsRefresh) payloadsRefresh.addEventListener('click', () => loadPayloads());
   if (pentestStart) pentestStart.addEventListener('click', () => controlPentest('start'));
+  if (pentestOpen) pentestOpen.addEventListener('click', () => setActiveTab('pentest'));
   if (pentestStop) pentestStop.addEventListener('click', () => controlPentest('stop'));
+  if (pentestFrameStart) pentestFrameStart.addEventListener('click', () => controlPentest('start'));
+  if (pentestFrameReload) pentestFrameReload.addEventListener('click', () => loadPentestConsole(true));
+  if (pentestFrameStop) pentestFrameStop.addEventListener('click', () => controlPentest('stop'));
   if (mobPentestStart) mobPentestStart.addEventListener('click', () => controlPentest('start'));
   if (mobPentestStop) mobPentestStop.addEventListener('click', () => controlPentest('stop'));
   if (mobileSystemRefresh) mobileSystemRefresh.addEventListener('click', () => loadMobileSystemStatus());
