@@ -1,0 +1,73 @@
+{
+    "IDLE": [
+        "Icewire Ghost link idling.",
+        "Neon rain on standby.",
+        "Waiting for a hostile skyline."
+    ],
+    "NetworkScanner": [
+        "Sweeping alleys for live hosts.",
+        "Pinging the grid glow by glow.",
+        "Mapping the local sprawl."
+    ],
+    "NmapVulnScanner": [
+        "Running black-market vuln augury.",
+        "ICE seams are being traced.",
+        "Enumerating exposed chrome."
+    ],
+    "SSHBruteforce": [
+        "Trying SSH keys in the rain.",
+        "Port 22 gets a neon knock."
+    ],
+    "FTPBruteforce": [
+        "FTP vault tumblers spinning.",
+        "Old doors still leak light."
+    ],
+    "TelnetBruteforce": [
+        "Telnet ghosts answer too loudly.",
+        "Vintage access, modern attitude."
+    ],
+    "SMBBruteforce": [
+        "SMB shares under streetlight.",
+        "Checking corporate file alleys."
+    ],
+    "SQLBruteforce": [
+        "Querying the chrome oracle.",
+        "Database locks meet neon picks."
+    ],
+    "RDPBruteforce": [
+        "Remote desktop visor online.",
+        "RDP windows glow in the haze."
+    ],
+    "StealFilesSSH": [
+        "Siphoning files through SSH smoke.",
+        "Secure copy, insecure choices."
+    ],
+    "StealFilesFTP": [
+        "Dragging loot from FTP shadows.",
+        "Plaintext crates are moving."
+    ],
+    "StealFilesSMB": [
+        "SMB lockers are opening.",
+        "Corporate folders hit the street."
+    ],
+    "StealFilesTelnet": [
+        "Telnet relics spill secrets.",
+        "Old wire, fresh data."
+    ],
+    "StealDataSQL": [
+        "Dumping tables under neon glass.",
+        "Records flow like blue rain."
+    ],
+    "LogStandalone": [
+        "Signal logged to the deck.",
+        "Trace note pinned."
+    ],
+    "LogStandalone2": [
+        "Second log shard captured.",
+        "More street telemetry saved."
+    ],
+    "ZombifySSH": [
+        "SSH shell recruited to the crew.",
+        "Another chrome ghost joins."
+    ]
+}

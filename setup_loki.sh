@@ -85,6 +85,21 @@ else
     echo "✅ Virtual environment already exists"
 fi
 
+# Generate and install KTOx's bundled Loki themes after Python deps exist.
+LOKI_PYTHON="$LOKI_VENDOR_DIR/.venv/bin/python3"
+if [ ! -x "$LOKI_PYTHON" ]; then
+    LOKI_PYTHON="python3"
+fi
+if [ -f "$KTOX_DIR/payloads/offensive/install_loki_themes.py" ]; then
+    echo "🎨 Installing KTOx cyberpunk Loki themes..."
+    if ! "$LOKI_PYTHON" -c "import PIL" &> /dev/null; then
+        "$LOKI_PYTHON" -m pip install pillow || \
+            echo "⚠️  Could not install Pillow for Loki theme generation"
+    fi
+    "$LOKI_PYTHON" "$KTOX_DIR/payloads/offensive/install_loki_themes.py" "$KTOX_DIR" || \
+        echo "⚠️  Could not install bundled Loki themes"
+fi
+
 # Verify installation
 if python3 "$LOKI_VENDOR_DIR/loki.py" --help &> /dev/null; then
     echo "✅ Loki is ready to use"
