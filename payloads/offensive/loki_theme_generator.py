@@ -442,36 +442,6 @@ def sprite_frame(theme_key: str, action: str, frame: int) -> Image.Image:
     return draw_reference_sprite(profile, row, col)
 
 
-def draw_scanner_prop(d: ImageDraw.ImageDraw, size: int, margin: int, color: tuple[int, int, int, int], unit: int) -> None:
-    r = size // 3
-    cx, cy = size - margin - unit, margin + unit
-    d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=color, width=max(1, unit // 2))
-    d.line((cx - unit, cy, cx + unit, cy), fill=color, width=max(1, unit // 3))
-    d.line((cx, cy - unit, cx, cy + unit), fill=color, width=max(1, unit // 3))
-
-
-def draw_weapon_prop(d: ImageDraw.ImageDraw, size: int, margin: int, color: tuple[int, int, int, int], unit: int, icon: bool = False) -> None:
-    if icon:
-        d.rectangle((size - margin - unit * 2, margin, size - margin, margin + unit * 3), fill=color)
-        d.polygon([(size - margin - unit, margin - unit), (size - margin + unit // 2, margin + unit // 2), (size - margin - unit, margin + unit * 2)], fill=color)
-    else:
-        barrel_len = unit * 3
-        d.rectangle((size - margin - barrel_len, size // 2 - unit, size - margin, size // 2 + unit), fill=color)
-        d.ellipse((size - margin - unit * 2, size // 2 - unit * 2, size - margin + unit, size // 2 + unit * 2), fill=color)
-
-
-def draw_hacking_prop(d: ImageDraw.ImageDraw, size: int, margin: int, color: tuple[int, int, int, int], unit: int) -> None:
-    x, y = size - margin - unit * 2, size // 2
-    for i in range(3):
-        d.rectangle((x - i * unit, y - unit // 2, x - i * unit + unit - 1, y + unit // 2), outline=color, fill=color if i % 2 else None)
-
-
-def draw_grab_prop(d: ImageDraw.ImageDraw, size: int, margin: int, color: tuple[int, int, int, int], unit: int) -> None:
-    x, y = margin + unit, size // 2
-    d.ellipse((x, y - unit, x + unit, y + unit), fill=color)
-    d.rectangle((x - unit // 2, y, x + unit + unit // 2, y + unit * 2), fill=color)
-
-
 def draw_sprite(theme_key: str, theme: dict, action: str, frame: int, icon: bool = False) -> Image.Image:
     size = 46 if icon else 175
     sprite = sprite_frame(theme_key, action, max(frame, 1))
@@ -485,19 +455,6 @@ def draw_sprite(theme_key: str, theme: dict, action: str, frame: int, icon: bool
     x = (size - sprite.width) // 2
     y = size - sprite.height - (2 if icon else 8)
     img.alpha_composite(sprite, (x, y))
-
-    d = ImageDraw.Draw(img, "RGBA")
-    prop_color = theme["accent"] + (235,) if sum(action.encode("utf-8")) % 2 else theme["accent2"] + (235,)
-    unit = 2 if icon else 7
-
-    if "Scanner" in action or action == "IDLE":
-        draw_scanner_prop(d, size, margin, prop_color, unit)
-    elif "Bruteforce" in action:
-        draw_weapon_prop(d, size, margin, prop_color, unit, icon)
-    elif "Steal" in action or "Data" in action:
-        draw_grab_prop(d, size, margin, prop_color, unit)
-    else:
-        draw_hacking_prop(d, size, margin, prop_color, unit)
     return img
 
 
