@@ -381,7 +381,8 @@ The `setup_loki.sh` script will:
 1. Clone the official loki-recon repository if needed
 2. Detect and install system dependencies (nmap, smbclient, freerdp, etc.)
 3. Create a Python virtual environment with all required packages
-4. Verify the installation
+4. Generate and install the bundled KTOx cyberpunk Loki theme pack (`neon_runner`, `chrome_mantis`, `edge_fury`, `icewire_ghost`)
+5. Verify the installation
 
 **Note:** This only needs to be run once after initial KTOx installation.
 
@@ -402,6 +403,21 @@ python3 payloads/offensive/loki_manager.py stop
 ```
 
 Access the web UI at `http://[ip]:8000/`. Loki stores everything in `/home/user/KTOX_Pi/loot/loki_data/` (or `/root/KTOx/loot/loki_data/` on production).
+
+### KTOx Cyberpunk Theme Pack
+
+KTOx includes four additional Loki skins under `payloads/offensive/loki_themes/`:
+
+- `neon_runner` — hot pink and cyan street-ops cyberpunk.
+- `chrome_mantis` — acid green black-chrome intrusion deck.
+- `edge_fury` — gold/redline edge-runner crew vibe.
+- `icewire_ghost` — white-blue ICE and stealth netrunning.
+
+Fresh Loki installs generate and install these themes automatically through `setup_loki.sh` after the Loki Python environment is ready. To refresh them in an existing checkout, run:
+
+```bash
+python3 payloads/offensive/install_loki_themes.py /root/KTOx
+```
 
 ### Features
 
