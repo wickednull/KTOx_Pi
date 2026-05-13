@@ -3,7 +3,7 @@
 Optimize screensaver GIFs for the current LCD resolution.
 
 - Backs up originals to img/screensaver/originals/
-- Converts GIFs to the LCD resolution (128x128 or 240x240)
+- Converts GIFs to the active LCD resolution (for example 128x128, 240x240, or 480x320)
 - Preserves frame timing and animation quality (LANCZOS resize)
 - Skips GIFs already at the correct size
 - Safe to run multiple times
@@ -16,28 +16,20 @@ Usage:
 import os
 import sys
 import shutil
-import json
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from PIL import Image, ImageSequence
 
+from display_profiles import get_target_size
+
 # Detect target resolution from gui_conf.json
-INSTALL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+INSTALL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CONF_PATH = os.path.join(INSTALL_DIR, "gui_conf.json")
 SCREENSAVER_DIR = os.path.join(INSTALL_DIR, "img", "screensaver")
 ORIGINALS_DIR = os.path.join(SCREENSAVER_DIR, "originals")
 
 def _get_target_size():
-    try:
-        with open(CONF_PATH) as f:
-            conf = json.load(f)
-        dtype = conf.get("DISPLAY", {}).get("type", "ST7735_128")
-    except Exception:
-        dtype = "ST7735_128"
-    if dtype == "ST7789_240":
-        return 240, 240
-    return 128, 128
+    return get_target_size(CONF_PATH)
 
 
 def optimize():

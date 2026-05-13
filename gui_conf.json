@@ -26,5 +26,14 @@
     "UI": {
         "THEME": "ktox_red",
         "ROTATION": 0
+    },
+    "DISPLAY": {
+        "type": "ST7735_128",
+        "supported_types": [
+            "ST7735_128",
+            "ST7789_240",
+            "MHS35_FB"
+        ],
+        "notes": "Set type to ST7789_240 for Waveshare 1.3in 240x240, or MHS35_FB for MHS 3.5in framebuffer/touch targets."
     }
 }

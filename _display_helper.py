@@ -11,28 +11,18 @@ Usage in a payload:
 All pixel coordinates passed to d.text(), d.rectangle(), d.line(), etc.
 are automatically scaled from 128-base to the actual LCD resolution.
 """
-import os, sys, json
 from PIL import ImageDraw, ImageFont
 
-# ---------------------------------------------------------------------------
-# Detect scale factor (same logic as LCD_1in44.py)
-# ---------------------------------------------------------------------------
-_DISPLAY_TYPE = "ST7735_128"
-_CONF_PATHS = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "gui_conf.json"),
-    "/root/KTOx/gui_conf.json",
-]
-for _p in _CONF_PATHS:
-    if os.path.isfile(_p):
-        try:
-            with open(_p, "r") as _f:
-                _conf = json.load(_f)
-            _DISPLAY_TYPE = _conf.get("DISPLAY", {}).get("type", _DISPLAY_TYPE)
-        except Exception:
-            pass
-        break
+from display_profiles import get_display_profile
 
-LCD_SCALE = 240 / 128 if _DISPLAY_TYPE == "ST7789_240" else 1.0
+# ---------------------------------------------------------------------------
+# Detect target display and scale from the profile registry
+# ---------------------------------------------------------------------------
+_DISPLAY_PROFILE = get_display_profile()
+LCD_SCALE_X = _DISPLAY_PROFILE.scale_x
+LCD_SCALE_Y = _DISPLAY_PROFILE.scale_y
+LCD_SCALE = _DISPLAY_PROFILE.scale
+LCD_WIDTH, LCD_HEIGHT = _DISPLAY_PROFILE.size
 
 
 def S(v):
@@ -60,7 +50,7 @@ def scaled_font(size=10):
 # ---------------------------------------------------------------------------
 def _scale_point(pt):
     """Scale a 2-tuple or 2-list."""
-    return (S(pt[0]), S(pt[1]))
+    return (int(pt[0] * LCD_SCALE_X), int(pt[1] * LCD_SCALE_Y))
 
 
 def _scale_coords(coords):
@@ -72,10 +62,15 @@ def _scale_coords(coords):
         return [_scale_point(p) for p in coords]
     # flat 4-value box: (x0, y0, x1, y1) or [x0, y0, x1, y1]
     if len(coords) == 4:
-        return [S(coords[0]), S(coords[1]), S(coords[2]), S(coords[3])]
+        return [
+            int(coords[0] * LCD_SCALE_X),
+            int(coords[1] * LCD_SCALE_Y),
+            int(coords[2] * LCD_SCALE_X),
+            int(coords[3] * LCD_SCALE_Y),
+        ]
     # flat 2-value point
     if len(coords) == 2:
-        return (S(coords[0]), S(coords[1]))
+        return (int(coords[0] * LCD_SCALE_X), int(coords[1] * LCD_SCALE_Y))
     return coords
 
 
